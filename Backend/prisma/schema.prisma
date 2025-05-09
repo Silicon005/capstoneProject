@@ -1,0 +1,218 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  userName     String   @unique
+  prn          String   @unique
+  email        String   @unique
+  passwordHash String
+  role         Role
+  school       School?  @relation(fields: [schoolId], references: [id])
+  schoolId     String?
+  createdAt    DateTime @default(now())
+  courses         Course[]         @relation("TeacherCourses")
+  enrollments     Enrollment[]
+  testStatuses    TestStatus[]
+  testSubmissions TestSubmission[]
+
+  tests     Test[]     @relation("TestTeacher")
+  questions Question[] @relation("QuestionTeacher")
+
+  notifications Notification[] 
+}
+
+model School {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  users   User[]
+  courses Course[]
+}
+
+model Semester {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  courses Course[]
+}
+
+model Course {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  teacher     User     @relation("TeacherCourses", fields: [teacherId], references: [id])
+  teacherId   String
+  school      School   @relation(fields: [schoolId], references: [id])
+  schoolId    String
+  semester    Semester @relation(fields: [semesterId], references: [id])
+  semesterId  String
+  createdAt   DateTime @default(now())
+
+  enrollmentKey String
+
+  chapters    Chapter[]
+  enrollments Enrollment[]
+  tests       Test[]
+  questions   Question[]
+}
+
+model Chapter {
+  id        String   @id @default(uuid())
+  name      String
+  course    Course   @relation(fields: [courseId], references: [id])
+  courseId  String
+  createdAt DateTime @default(now())
+
+  topics Topic[]
+}
+
+model Topic {
+  id        String   @id @default(uuid())
+  name      String
+  chapter   Chapter  @relation(fields: [chapterId], references: [id])
+  chapterId String
+  createdAt DateTime @default(now())
+  Test      Test[]
+}
+
+model Enrollment{
+  id              String           @id @default(uuid())
+  student         User             @relation(fields: [studentId], references: [id])
+  studentId       String
+  course          Course           @relation(fields: [courseId], references: [id])
+  courseId        String
+  status          EnrollmentStatus @default(ENROLLED)
+  enrolledAt      DateTime         @default(now())
+  completedTests  String[]         
+}
+
+model Test {
+  id         String   @id @default(uuid())
+  name       String
+  totalMarks Int
+  course     Course   @relation(fields: [courseId], references: [id])
+  courseId   String
+  teacher    User     @relation("TestTeacher", fields: [teacherId], references: [id])
+  teacherId  String
+  createdAt  DateTime @default(now())
+
+  topic      Topic    @relation(fields: [topicId], references: [id]) // ✅ Required
+  topicId    String   // ✅ Required
+
+  startTime  DateTime @default(now())  // ✅ Set default to now
+  endTime    DateTime @default(now())  // ✅ Set default to now
+  duration   Int      @default(60)     // ✅ Set default duration (e.g., 60 minutes)
+  maxAttempts Int     @default(1)      // ✅ Set default max attempts
+
+  testQuestions   TestQuestion[]
+  testStatuses    TestStatus[]
+  testSubmissions TestSubmission[]
+}
+
+
+
+
+model Question {
+  id            String   @id @default(uuid())
+  text          String
+  level         Int
+  type          QuestionType // ✅ Required instead of nullable
+  options       String[]
+  correctAnswer String    // ✅ Ensure correct answers are saved (NOT NULL)
+  course        Course   @relation(fields: [courseId], references: [id])
+  courseId      String
+  teacher       User     @relation("QuestionTeacher", fields: [teacherId], references: [id])
+  teacherId     String
+  createdAt     DateTime @default(now())
+  hints         String[]
+
+  testQuestions   TestQuestion[]
+  testSubmissions TestSubmission[] @relation("TestSubmissionQuestion")
+}
+
+enum QuestionType{
+  MCQ
+  DIRECT_ANSWER
+}
+
+model TestQuestion {
+  id         String   @id @default(uuid())
+  test       Test     @relation(fields: [testId], references: [id])
+  testId     String
+  question   Question @relation(fields: [questionId], references: [id])
+  questionId String
+}
+
+model TestStatus {
+  id        String            @id @default(uuid())
+  student   User               @relation(fields: [studentId], references: [id])
+  studentId String
+  test      Test               @relation(fields: [testId], references: [id])
+  testId    String
+  status    TestProgressStatus @default(NOT_STARTED)
+  updatedAt DateTime           @default(now())
+}
+
+model TestSubmission{
+  id            String   @id @default(uuid())
+  student       User     @relation(fields: [studentId], references: [id])
+  studentId     String
+  test          Test     @relation(fields: [testId], references: [id])
+  testId        String
+  question      Question @relation("TestSubmissionQuestion", fields: [questionId], references: [id]) // ✅ FIXED
+  questionId    String
+  answer        String
+  marksObtained Int      @default(0)
+  submittedAt   DateTime @default(now())
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum EnrollmentStatus {
+  ENROLLED
+  UNENROLLED
+}
+
+enum TestProgressStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+
+model Notification {
+  id          String              @id @default(uuid())
+  user        User                @relation(fields: [userId], references: [id])
+  userId      String
+  message     String
+  type        NotificationType
+  createdAt   DateTime            @default(now())
+  seen        Boolean  @default(false)
+}
+
+enum NotificationType {
+  CREATED_TEST
+  ADMIN_NOTIFICATION
+  CREATED_COURSE
+  COURSE_ENROLLED
+}
